@@ -28,7 +28,7 @@
 
 
 
-if [[ $# -lt 2 ]]; then
+if [[ $# -ne 2 ]]; then
     echo "USAGE: comptract.sh <ACCOUNT NAME> <Contract Name> from within the directory"
     exit 1
 fi
