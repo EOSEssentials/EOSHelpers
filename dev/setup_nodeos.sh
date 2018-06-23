@@ -4,6 +4,9 @@
 # Uses the standard EOSIO public key to initialize.
 # Defaults the the `eos` directory to `~/eos` if no path is specified
 
+# !!!FAQ!!! You might need to run this twice.
+# It seems to time out on setting the eosio.system contract.
+
 EOS_BASE_PATH="$HOME/eos"
 
 if [ "$#" -eq 1 ]; then
