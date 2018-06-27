@@ -15,10 +15,19 @@ ECHO_ONLY="yes"
 SERVER_BLOCK_PATH="/etc/nginx/sites-available/default"
 SERVER_BLOCK=''
 
+BLACKLIST=(api.main.alohaeos.com, mainnet.eoscalgary.io, api.mainnet.eospace.io)
+
 function check_node(){
     RESULT=$(curl -H "Origin: $1://scattellet.com" -XGET "$1://$2/v1/chain/get_info" --verbose --max-time 1 --stderr -)
     RESULT=${RESULT#*="Host: $2"}
     RESULT=${RESULT//[[:space:]]/}
+
+
+    for blacklisted in "${BLACKLIST[@]}"; do
+        if [ "$2" = $blacklisted ]; then
+            return 1
+        fi
+    done
 
     # Rejecting cloudflare as they mask CORS
     if [[ ${RESULT} == *"Server:cloudflare"* ]]; then
@@ -91,7 +100,8 @@ function parse_nodes(){
 parse_nodes "$HTTP" "http"
 parse_nodes "$HTTPS" "https"
 
-SERVER_BLOCK+=$'upstream nodes {'
+SERVER_BLOCK+=$'upstream nodes {\n'
+SERVER_BLOCK+=$'    ip_hash;\n'
 for node in "${HTTP_NODES[@]}"; do
     SERVER_BLOCK+=$'\n'
     SERVER_BLOCK+="    server $node;"
@@ -99,7 +109,8 @@ done
 SERVER_BLOCK+=$'\n}\n'
 SERVER_BLOCK+=$'\n'
 
-SERVER_BLOCK+=$'upstream ssl_nodes {'
+SERVER_BLOCK+=$'upstream ssl_nodes {\n'
+SERVER_BLOCK+=$'    ip_hash;\n'
 for node in "${HTTPS_NODES[@]}"; do
     SERVER_BLOCK+=$'\n'
     SERVER_BLOCK+="    server $node:443;"
@@ -113,6 +124,11 @@ SERVER_BLOCK_DEFAULTS="
     proxy_set_header X-Forwarded-Proto \$scheme;
 "
 
+SERVER_BLOCK_RESOLVER="
+    resolver                  8.8.8.8 valid=300s;
+    resolver_timeout          10s;
+"
+
 SERVER_BLOCK+="
 server {
   listen 80;
@@ -120,6 +136,7 @@ server {
   location / {
     proxy_pass http://nodes;
 $SERVER_BLOCK_DEFAULTS
+$SERVER_BLOCK_RESOLVER
   }
 }
 
@@ -135,6 +152,7 @@ server {
   location / {
     proxy_pass https://ssl_nodes;
 $SERVER_BLOCK_DEFAULTS
+$SERVER_BLOCK_RESOLVER
   }
 }"
 
@@ -142,5 +160,5 @@ if [[ $ECHO_ONLY == "yes" ]]; then
     echo "$SERVER_BLOCK"
 else
     echo "$SERVER_BLOCK" >$SERVER_BLOCK_PATH
-    service nginx restart
+    sudo nginx -t && sudo service nginx reload
 fi
